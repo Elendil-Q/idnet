@@ -12,6 +12,6 @@ defaults:
 
 model:
   name: RecIDE
-  update_iters: 1
+  update_iters: 2
   pred_next_flow: true
-  pretrain_ckpt: idn/checkpoint/tid.pt
+  pretrain_ckpt: /home/elendil/GD/idnet/idn/checkpoint/tid.pt

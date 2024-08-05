@@ -1,4 +1,4 @@
 dataset_name: dsec
 common:
-  data_root: data/
-  test_root: data/test/
+  data_root: /home/elendil/DATA/DESC/
+  test_root: /home/elendil/DATA/DESC/test/

@@ -15,7 +15,7 @@ from .validation import Validator
 from .callbacks import CallbackBridge
 from .exp_tracker import ExpTracker
 from .retrieval_fn import get_retreival_fn
-from ..loader.loader_dsec import (
+from loader.loader_dsec import (
     Sequence,
     RepresentationType,
     DatasetProvider,
@@ -24,7 +24,7 @@ from ..loader.loader_dsec import (
     train_collate,
     rec_train_collate
 )
-from ..loader.loader_mvsec import (
+from loader.loader_mvsec import (
     MVSEC,
     MVSECRecurrent
 )

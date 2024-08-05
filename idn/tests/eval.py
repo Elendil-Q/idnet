@@ -1,6 +1,6 @@
 from collections import namedtuple
-from ..utils.retrieval_fn import get_retreival_fn
-from ..model.loss import sparse_lnorm, compute_npe
+from utils.retrieval_fn import get_retreival_fn
+from model.loss import sparse_lnorm, compute_npe
 
 fm = namedtuple("frame_metric", ["n_frame", "value"])
 

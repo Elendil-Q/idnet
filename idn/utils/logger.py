@@ -7,7 +7,8 @@ import tempfile
 import pathlib
 import torch
 from contextlib import contextmanager, nullcontext
-from ..tests.eval import fm
+from tests.eval import fm
+from utils.iwe import warp_events, compute_pol_iwe
 
 
 class Logger:
@@ -23,7 +24,7 @@ class Logger:
                 if isinstance(idx, str):
                     assert '-' in idx
                     a, b = idx.split('-')
-                    index[i] = list(range(int(a), int(b)+1))
+                    index[i] = list(range(int(a), int(b) + 1))
             parsed_list = []
             for i in index:
                 # this is because i can be type of omegaconf.listconfig
@@ -64,6 +65,9 @@ class Logger:
                 if batch['save_submission'] or save_all:
                     self.save_submission(out['final_prediction'],
                                          batch['file_index'].cpu().item())
+
+            self.save_iwe(out['next_flow'], batch['events_rect'], batch['file_index'].cpu().item())
+
             if getattr(self.config, "saved_tensors", None) is None:
                 return
             for key, value in itertools.chain(batch.items(), out.items()):
@@ -89,9 +93,9 @@ class Logger:
             flow = flow.squeeze()
             _, h, w = flow.shape
             scaled_flow = np.rint(
-                flow*128 + 2**15).astype(np.uint16).transpose(1, 2, 0)
+                flow * 128 + 2 ** 15).astype(np.uint16).transpose(1, 2, 0)
             flow_image = np.concatenate((scaled_flow, np.zeros((h, w, 1),
-                                        dtype=np.uint16)), axis=-1)
+                                                               dtype=np.uint16)), axis=-1)
             imageio.imwrite(os.path.join(self.path, "submission", f"{file_idx:06d}.png"),
                             flow_image, format='PNG-FI')
 
@@ -103,6 +107,18 @@ class Logger:
             if isinstance(value, np.ndarray):
                 np.save(os.path.join(self.path, f"{key}_{idx:05d}.npy"), value)
                 return
+
+        def save_iwe(self, flow, events, file_idx):
+            iwe = warp_events(flow, events, (480, 640), flow_scaling=1)
+            # iwe = np.clip(iwe, 0, 255)
+            iwe = (iwe - np.min(iwe)) / (np.max(iwe) - np.min(iwe)) * 255
+            iwe = iwe.astype(np.uint8)
+
+            save_dir = os.path.join(self.path, "iwe")
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            imageio.imwrite(os.path.join(save_dir, f"{file_idx:06d}.png"),
+                            iwe.astype(np.uint8))
 
         def log_metrics(self, results):
             self.results = results
@@ -165,6 +181,5 @@ class Logger:
                     for stat, value in stats.items():
                         assert isinstance(value, (int, float))
                         summary_flat['-'.join([seq_name,
-                                              quantity, metric, stat])] = value
+                                               quantity, metric, stat])] = value
         return summary
-

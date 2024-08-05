@@ -3,4 +3,4 @@ defaults:
 
 hidden_dim: 96
 downsample: 8
-pretrain_ckpt: idn/checkpoint/id-8x.pt
+pretrain_ckpt: /home/elendil/GD/idnet/idn/checkpoint/id-8x.pt

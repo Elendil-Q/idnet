@@ -1,8 +1,8 @@
 from collections import namedtuple
-from ..utils.logger import Logger
-from ..loader.loader_dsec import assemble_dsec_sequences, rec_train_collate, \
+from utils.logger import Logger
+from loader.loader_dsec import assemble_dsec_sequences, rec_train_collate, \
     train_collate
-from ..utils.helper_functions import move_batch_to_cuda
+from utils.helper_functions import move_batch_to_cuda
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader

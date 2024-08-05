@@ -1,4 +1,4 @@
-from ..model.loss import sparse_l1
+from model.loss import sparse_l1
 
 def get_loss_fn_by_name(loss_name):
     if loss_name == 'sparse_l1':

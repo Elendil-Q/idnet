@@ -1,15 +1,15 @@
 data_loader:
   train:
-    gpu: ???
+    gpu: 0
     args:
-      batch_size: ???
+      batch_size: 1
       shuffle: true
       num_workers: 2
       pin_memory: false
       prefetch_factor: 2
       persistent_workers: false
   val:
-    gpu: ???
+    gpu: 0
     mp: false
     batch_freq: 1500
     args:

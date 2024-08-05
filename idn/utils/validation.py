@@ -6,7 +6,7 @@ from tqdm import tqdm
 import importlib
 
 from .helper_functions import move_batch_to_cuda, move_list_to_cuda, move_tensor_to_cuda
-from ..model.loss import sparse_lnorm
+from model.loss import sparse_lnorm
 
 
 def log_tensors(idx, dict_of_tensors, tmp_folder):
@@ -31,7 +31,7 @@ class Validator:
 
     @staticmethod
     def get_test_type(test_name, test_type=None):
-        from ..tests import dsec as dsec_tests
+        from tests import dsec as dsec_tests
         if test_name == "dsec":
             return dsec_tests.assemble_dsec_test_cls(test_type)
         if test_name == "mvsec_day1":

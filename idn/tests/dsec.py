@@ -1,12 +1,11 @@
-
 from torch.utils.data import DataLoader
-from ..loader.loader_dsec import assemble_dsec_sequences, assemble_dsec_test_set, rec_train_collate, \
+from loader.loader_dsec import assemble_dsec_sequences, assemble_dsec_test_set, rec_train_collate, \
     train_collate
-from ..loader.loader_mvsec import MVSEC
+from loader.loader_mvsec import MVSEC
 from .test import Test
 import torch
 from tqdm import tqdm
-from ..utils.helper_functions import move_batch_to_cuda
+from utils.helper_functions import move_batch_to_cuda
 import time
 
 
@@ -117,7 +116,8 @@ def assemble_dsec_test_cls(test_type_name=None):
 
                                     out = forward_pass_fn(batch)
                                     end_time = time.perf_counter()
-                                    #print(f"Forward pass time: {(end_time - start_time):.4f}")
+
+                                    # print(f"Forward pass time: {(end_time - start_time):.4f}")
                                     self.evaluator.evaluate(batch, out, idx)
                                     rec.log_tensors(batch, out, idx, save_all)
                                 rec.log_metrics(self.evaluator.results)
@@ -147,7 +147,9 @@ def assemble_dsec_test_cls(test_type_name=None):
                 assert check_submission(
                     Path(tempdir), Path("data/test_forward_optical_flow_timestamps")), \
                     "submission did not pass check"
+
     return TestDSEC
+
 
 class TestMVSEC(Test):
     def __init__(self, test_spec):
@@ -159,7 +161,7 @@ class TestMVSEC(Test):
         collate_fn = rec_train_collate if self.spec.dataset.val.get("recurrent", False) \
             else train_collate
         assert self.spec.data_loader.args.shuffle is False, \
-           "shuffle must be false for val run."
+            "shuffle must be false for val run."
         if isinstance(valid_set, list):
             val_dataloader = [DataLoader(
                 seq, collate_fn=collate_fn, **self.spec.data_loader.args

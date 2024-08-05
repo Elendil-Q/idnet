@@ -8,22 +8,18 @@ from time import time
 import cv2
 # import h5pickle as h5py
 import h5py
+import hdf5plugin
 from numba import jit
 import numpy as np
 import os
 import imageio
-import hashlib
-import mkl
 import torch
 from torchvision.transforms import ToTensor, RandomCrop
 from torchvision import transforms as tf
 from torch.utils.data import Dataset, DataLoader
-from matplotlib import pyplot as plt, transforms
-from ..utils import transformers
 
-
-from ..utils.dsec_utils import RepresentationType, VoxelGrid, PolarityCount, flow_16bit_to_float
-from ..utils.transformers import (
+from utils.dsec_utils import RepresentationType, VoxelGrid, PolarityCount, flow_16bit_to_float
+from utils.transformers import (
     downsample_spatial,
     downsample_spatial_mask,
     apply_transform_to_field,
@@ -117,8 +113,8 @@ class EventSlicer:
         window_end_ms:      conservative end time in milliseconds
         """
         assert ts_end_us > ts_start_us
-        window_start_ms = math.floor(ts_start_us/1000)
-        window_end_ms = math.ceil(ts_end_us/1000)
+        window_start_ms = math.floor(ts_start_us / 1000)
+        window_end_ms = math.ceil(ts_end_us / 1000)
         return window_start_ms, window_end_ms
 
     @staticmethod
@@ -189,7 +185,8 @@ class EventSlicer:
 
 
 class Sequence(Dataset):
-    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test', delta_t_ms: int = 100,
+    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test',
+                 delta_t_ms: int = 100,
                  num_bins: int = 15, transforms=[], name_idx=0, visualize=False, load_gt=False):
         assert num_bins >= 1
         assert delta_t_ms == 100
@@ -228,8 +225,8 @@ class Sequence(Dataset):
             ev_dir_location = seq_path / 'events' / 'left'
             seq_name = seq_path.parts[-1]
             flow_path = seq_path.parents[1] / \
-                "train_optical_flow"/seq_name/'flow'
-            timestamp_file = flow_path/'forward_timestamps.txt'
+                        "train_optical_flow" / seq_name / 'flow'
+            timestamp_file = flow_path / 'forward_timestamps.txt'
             self.flow_png = [Path(os.path.join(flow_path / 'forward', img)) for img in sorted(
                 os.listdir(flow_path / 'forward'))]
             timestamps_images = np.loadtxt(
@@ -279,10 +276,9 @@ class Sequence(Dataset):
         self.h5rect = h5py.File(str(ev_rect_file), 'r')
         self.rectify_ev_map = self.h5rect['rectify_map'][()]
 
-
     def events_to_voxel_grid(self, p, t, x, y, device: str = 'cpu'):
         t = (t - t[0]).astype('float32')
-        t = (t/t[-1])
+        t = (t / t[-1])
         x = x.astype('float32')
         y = y.astype('float32')
         pol = p.astype('float32')
@@ -301,7 +297,7 @@ class Sequence(Dataset):
     def get_disparity_map(filepath: Path):
         assert filepath.is_file()
         disp_16bit = cv2.imread(str(filepath), cv2.IMREAD_ANYDEPTH)
-        return disp_16bit.astype('float32')/256
+        return disp_16bit.astype('float32') / 256
 
     @staticmethod
     def load_flow(flowfile: Path):
@@ -366,13 +362,25 @@ class Sequence(Dataset):
 
             if crop_window is not None:
                 # Cropping (+- 2 for safety reasons)
-                x_mask = (x_rect >= crop_window['start_x']-2) & (
-                    x_rect < crop_window['start_x']+crop_window['crop_width']+2)
-                y_mask = (y_rect >= crop_window['start_y']-2) & (
-                    y_rect < crop_window['start_y']+crop_window['crop_height']+2)
+                x_mask = (x_rect >= crop_window['start_x'] - 2) & (
+                        x_rect < crop_window['start_x'] + crop_window['crop_width'] + 2)
+                y_mask = (y_rect >= crop_window['start_y'] - 2) & (
+                        y_rect < crop_window['start_y'] + crop_window['crop_height'] + 2)
                 mask_combined = x_mask & y_mask
                 p = p[mask_combined]
                 t = t[mask_combined]
+            else:
+                x_mask = (x_rect >= 0) & (
+                        x_rect <= self.width - 1)
+                y_mask = (y_rect >= 0) & (
+                        y_rect < self.height - 1)
+                mask_combined = x_mask & y_mask
+                p = p[mask_combined]
+                t = t[mask_combined]
+
+                # norm
+                # t = (t - np.min(t)) / (np.max(t) - np.min(t))
+
                 x_rect = x_rect[mask_combined]
                 y_rect = y_rect[mask_combined]
 
@@ -383,6 +391,8 @@ class Sequence(Dataset):
                     p, t, x_rect, y_rect)
                 output[names[i]] = event_representation
             output['name_map'] = self.name_idx
+            t = (t - np.min(t)) / (np.max(t) - np.min(t))
+            output['events_rect'] = np.stack([y_rect, x_rect, t, p], axis=1)
 
             if self.load_gt:
                 output['flow_gt_' + names[i]
@@ -429,7 +439,6 @@ class Sequence(Dataset):
             else:
                 apply_transform_to_field(sample, transform, key_t)
 
-
         return sample
 
     def get_voxel_grid(self, idx):
@@ -439,7 +448,7 @@ class Sequence(Dataset):
                 self.timestamps_flow[0] - self.delta_t_us, self.timestamps_flow[0])
         elif idx > 0 and idx <= self.__len__():
             event_data = self.event_slicer.get_events(
-                self.timestamps_flow[idx-1], self.timestamps_flow[idx-1] + self.delta_t_us)
+                self.timestamps_flow[idx - 1], self.timestamps_flow[idx - 1] + self.delta_t_us)
         else:
             raise IndexError
 
@@ -474,7 +483,7 @@ class Sequence(Dataset):
             y = event_data['y']
 
             t = (t - t[0]).astype('float32')
-            t = (t/t[-1])
+            t = (t / t[-1])
             x = x.astype('float32')
             y = y.astype('float32')
             pol = p.astype('float32')
@@ -489,8 +498,8 @@ class Sequence(Dataset):
             xy_rect = self.rectify_events(x.int(), y.int())
             x_rect = torch.from_numpy(xy_rect[:, 0]).long()
             y_rect = torch.from_numpy(xy_rect[:, 1]).long()
-            value = 2*event_data_torch['p']-1
-            index = self.width*y_rect + x_rect
+            value = 2 * event_data_torch['p'] - 1
+            index = self.width * y_rect + x_rect
             mask = (x_rect < self.width) & (y_rect < self.height)
             event_count[i].put_(index[mask], value[mask], accumulate=True)
 
@@ -510,7 +519,8 @@ class Sequence(Dataset):
 
 
 class SequenceRecurrent(Sequence):
-    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test', delta_t_ms: int = 100,
+    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test',
+                 delta_t_ms: int = 100,
                  num_bins: int = 15, transforms=None, sequence_length=1, name_idx=0, visualize=False, load_gt=False):
         super(SequenceRecurrent, self).__init__(seq_path, representation_type, mode, delta_t_ms, transforms=transforms,
                                                 name_idx=name_idx, visualize=visualize, load_gt=load_gt)
@@ -521,15 +531,15 @@ class SequenceRecurrent(Sequence):
     def get_continuous_sequences(self):
         continuous_seq_idcs = []
         if self.sequence_length > 1:
-            for i in range(len(self.timestamps_flow)-self.sequence_length+1):
+            for i in range(len(self.timestamps_flow) - self.sequence_length + 1):
                 diff = self.timestamps_flow[i +
-                                            self.sequence_length-1] - self.timestamps_flow[i]
-                if diff < np.max([100000 * (self.sequence_length-1) + 1000, 101000]):
+                                            self.sequence_length - 1] - self.timestamps_flow[i]
+                if diff < np.max([100000 * (self.sequence_length - 1) + 1000, 101000]):
                     continuous_seq_idcs.append(i)
         else:
-            for i in range(len(self.timestamps_flow)-1):
-                diff = self.timestamps_flow[i+1] - self.timestamps_flow[i]
-                if diff < np.max([100000 * (self.sequence_length-1) + 1000, 101000]):
+            for i in range(len(self.timestamps_flow) - 1):
+                diff = self.timestamps_flow[i + 1] - self.timestamps_flow[i]
+                if diff < np.max([100000 * (self.sequence_length - 1) + 1000, 101000]):
                     continuous_seq_idcs.append(i)
         return continuous_seq_idcs
 
@@ -559,17 +569,17 @@ class SequenceRecurrent(Sequence):
         if 'flipped' in sample.keys():
             flip = sample['flipped']
 
-        for i in range(self.sequence_length-1):
+        for i in range(self.sequence_length - 1):
             j += 1
             ts_old = ts_cur
             ts_cur = self.timestamps_flow[j]
-            assert(ts_cur-ts_old < 100000 + 1000)
+            assert (ts_cur - ts_old < 100000 + 1000)
             sample = self.get_data_sample(
                 j, crop_window=crop_window, flip=flip)
             sequence.append(sample)
 
         # Check if the current sample is the first sample of a continuous sequence
-        if idx == 0 or self.valid_indices[idx]-self.valid_indices[idx-1] != 1:
+        if idx == 0 or self.valid_indices[idx] - self.valid_indices[idx - 1] != 1:
             sequence[0]['new_sequence'] = 1
             print("Timestamp {} is the first one of the next seq!".format(
                 self.timestamps_flow[self.valid_indices[idx]]))
@@ -581,8 +591,8 @@ class SequenceRecurrent(Sequence):
             i, j, h, w = RandomCrop.get_params(
                 sample["event_volume_old"], output_size=self.crop_size)
             keys_to_crop = ["event_volume_old", "event_volume_new",
-                            "flow_gt_event_volume_old", "flow_gt_event_volume_new", 
-                            "flow_gt_next",]
+                            "flow_gt_event_volume_old", "flow_gt_event_volume_new",
+                            "flow_gt_next", ]
 
             for sample in sequence:
                 for key, value in sample.items():
@@ -612,13 +622,13 @@ class DatasetProvider:
                 test_sequences.append(Sequence(child, representation_type, 'test', delta_t_ms, num_bins,
                                                transforms=[],
                                                name_idx=len(
-                                                   self.name_mapper_test)-1,
+                                                   self.name_mapper_test) - 1,
                                                visualize=visualize))
             elif type == 'warm_start':
                 test_sequences.append(SequenceRecurrent(child, representation_type, 'test', delta_t_ms, num_bins,
                                                         transforms=[], sequence_length=1,
                                                         name_idx=len(
-                                                            self.name_mapper_test)-1,
+                                                            self.name_mapper_test) - 1,
                                                         visualize=visualize))
             else:
                 raise Exception(
@@ -640,7 +650,8 @@ class DatasetProvider:
             self.test_dataset.datasets[0].num_bins), True)
 
 
-def assemble_dsec_sequences(dataset_root, include_seq=None, exclude_seq=None, require_gt=True, config=None, representation_type="voxel", num_bins=None):
+def assemble_dsec_sequences(dataset_root, include_seq=None, exclude_seq=None, require_gt=True, config=None,
+                            representation_type="voxel", num_bins=None):
     if representation_type is None:
         representation_type = "voxel"
     representation_type = RepresentationType.VOXEL if representation_type == "voxel" else representation_type
@@ -661,12 +672,13 @@ def assemble_dsec_sequences(dataset_root, include_seq=None, exclude_seq=None, re
         transforms['(?<!flow_gt_)event_volume'] = lambda sample: downsample_spatial(
             sample, config.downsample_ratio)
         transforms['flow_gt'] = lambda sample: [downsample_spatial(
-            sample[0], config.downsample_ratio) / config.downsample_ratio, downsample_spatial_mask(sample[1], config.downsample_ratio)]
+            sample[0], config.downsample_ratio) / config.downsample_ratio,
+                                                downsample_spatial_mask(sample[1], config.downsample_ratio)]
         # TODO: Flow gt mask handle downsample on flags
     if config.get("horizontal_flip", None):
         p_hflip = config.horizontal_flip
         assert p_hflip >= 0 and p_hflip <= 1
-        #from torchvision.transforms import RandomHorizontalFlip
+        # from torchvision.transforms import RandomHorizontalFlip
         # ignore probability of hflip for now, perform when 'hflip' key exists in transforms dict
         transforms['hflip'] = None
     if config.get("vertical_flip", None):
@@ -685,8 +697,8 @@ def assemble_dsec_sequences(dataset_root, include_seq=None, exclude_seq=None, re
             sequence_length=config.sequence_length) if dataset_cls == SequenceRecurrent else dict()
 
         seq_dataset.append(dataset_cls(Path(event_root) / seq,
-                           representation_type=representation_type, mode="train",
-                           load_gt=require_gt, transforms=transforms, **extra_arg))
+                                       representation_type=representation_type, mode="train",
+                                       load_gt=require_gt, transforms=transforms, **extra_arg))
     if config.get("concat_seq", True):
         return torch.utils.data.ConcatDataset(seq_dataset)
     else:
@@ -728,8 +740,8 @@ def assemble_dsec_train_set(train_set_root, flow_gt_root=None, exclude_seq=None,
     seq_dataset = []
     for seq in train_seqs:
         seq_dataset.append(Sequence(Path(train_set_root) / seq,
-                           RepresentationType.VOXEL, mode='train',
-                           transforms=ToTensor))
+                                    RepresentationType.VOXEL, mode='train',
+                                    transforms=ToTensor))
     return torch.utils.data.ConcatDataset(seq_dataset)
 
 

@@ -12,13 +12,13 @@ data_loader:
 
 
 logger:
-  save_dir: /tmp/collect/XX
+  save_dir: /home/elendil/GD/idnet/results/exp1
   saved_tensors:
 
 postprocess:
 
 metrics:
-    
+
 hydra:
   output_subdir: null
 
