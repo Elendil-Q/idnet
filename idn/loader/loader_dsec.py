@@ -318,14 +318,15 @@ class Sequence(Dataset):
         return len(self.timestamps_flow) - 1
 
     def rectify_events(self, x: np.ndarray, y: np.ndarray):
-        # assert location in self.locations
-        # From distorted to undistorted
-        rectify_map = self.rectify_ev_map
-        assert rectify_map.shape == (
-            self.height, self.width, 2), rectify_map.shape
-        assert x.max() < self.width
-        assert y.max() < self.height
-        return rectify_map[y, x]
+        # # assert location in self.locations
+        # # From distorted to undistorted
+        # rectify_map = self.rectify_ev_map
+        # assert rectify_map.shape == (
+        #     self.height, self.width, 2), rectify_map.shape
+        # assert x.max() < self.width
+        # assert y.max() < self.height
+        # return rectify_map[y, x]
+        return np.stack([x, y], axis=1)
 
     def get_data_sample(self, index, crop_window=None, flip=None):
         # First entry corresponds to all events BEFORE the flow map
@@ -392,7 +393,8 @@ class Sequence(Dataset):
                 output[names[i]] = event_representation
             output['name_map'] = self.name_idx
             t = (t - np.min(t)) / (np.max(t) - np.min(t))
-            output['events_rect'] = np.stack([y_rect, x_rect, t, p], axis=1)
+            if i == 1:
+                output['events_old'] = np.stack([y_rect, x_rect, t, p], axis=1)
 
             if self.load_gt:
                 output['flow_gt_' + names[i]

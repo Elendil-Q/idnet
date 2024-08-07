@@ -37,16 +37,18 @@ __global__ void generate_iwe(float *evt_x, float *evt_y, uint8_t *p, int cols, i
     {
         float x = evt_x[idx];
         float y = evt_y[idx];
-        int top_y = y;
-        int bot_y = y + 1;
-        int left_x = x;
-        int right_x = x + 1;
+        int top_y = (int)floor(y);
+        int bot_y = top_y + 1;
+        int left_x = (int)floor(x);
+        int right_x = left_x + 1;
         // 双线性插值，计算各个像素的权重
-        float w_tl = (1 - (x - left_x)) * (1 - (y - top_y));
-        float w_tr = (x - left_x) * (1 - (y - top_y));
-        float w_bl = (1 - (x - left_x)) * (y - top_y);
-        float w_br = (x - left_x) * (y - top_y);
-        bool in;
+        float delta_x = x - (float)left_x;
+        float delta_y = y - (float)top_y;
+        float w_tl = (1.0 - delta_x) * (1.0 - delta_y);
+        float w_tr = delta_x * (1.0 - delta_y);
+        float w_bl = (1.0 - delta_x) * delta_y;
+        float w_br = delta_x * delta_y;
+        bool in = false;
         inbounds(left_x, top_y, cols, rows, in);
         if (in)
         {
@@ -70,13 +72,12 @@ __global__ void generate_iwe(float *evt_x, float *evt_y, uint8_t *p, int cols, i
     }
 }
 
-void init_gpu_memory_mc(Mat optic_flow)
+void init_gpu_memory_mc(Eigen::MatrixXf optic_flow_x, Eigen::MatrixXf optic_flow_y)
 {
-    Mat iwe_mat = cv::Mat::zeros(optic_flow.rows, optic_flow.cols, CV_32FC1);
-    Mat optic_flow_channels[2];
-    split(optic_flow, optic_flow_channels);
-    optic_bytes = optic_flow_channels[0].rows * optic_flow_channels[0].step;
-    iwe_bytes = iwe_mat.rows * iwe_mat.step;
+    Eigen::MatrixXf optic_flow(optic_flow_x.rows(), optic_flow_x.cols() * 2);
+    Eigen::MatrixXf zero_iwe = Eigen::MatrixXf::Zero(optic_flow_x.rows(), optic_flow_x.cols());
+    optic_bytes = optic_flow_x.rows() * optic_flow_x.cols() * sizeof(float);
+    iwe_bytes = optic_bytes;
     cudaMalloc<float>(&optic_x, optic_bytes);
     cudaMalloc<float>(&optic_y, optic_bytes);
     cudaMalloc<float>(&iwe, iwe_bytes);
@@ -104,7 +105,7 @@ void free_gpu_memory_mc()
  * @param height 图像高度
  * @return Mat [H,W] 运动补偿后的事件图像 CV_32FC1
  */
-Mat iwe_cuda_warp(vector<float> evt_x, vector<float> evt_y, vector<uint8_t> evt_p, vector<double> evt_t, Mat optic_flow, const int width, const int height)
+Eigen::MatrixXf iwe_cuda_warp(vector<float> evt_x, vector<float> evt_y, vector<uint8_t> evt_p, vector<double> evt_t, Eigen::MatrixXf optic_flow_x, Eigen::MatrixXf optic_flow_y, const int width, const int height)
 {
     int events_num = evt_x.size();
     const int threads_per_block = 64;
@@ -112,7 +113,7 @@ Mat iwe_cuda_warp(vector<float> evt_x, vector<float> evt_y, vector<uint8_t> evt_
     // 初始化GPU内存
     if (!memory_initialized_mc)
     {
-        init_gpu_memory_mc(optic_flow);
+        init_gpu_memory_mc(optic_flow_x, optic_flow_y);
         memory_initialized_mc = true;
     }
 
@@ -132,10 +133,8 @@ Mat iwe_cuda_warp(vector<float> evt_x, vector<float> evt_y, vector<uint8_t> evt_
     cudaMemcpy(evt_p_d, evt_p.data(), events_num * sizeof(uint8_t), cudaMemcpyHostToDevice);
 
     // copy optic flow to GPU
-    Mat optic_flow_channels[2];
-    split(optic_flow, optic_flow_channels);
-    cudaMemcpy(optic_x, optic_flow_channels[0].data, optic_bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(optic_y, optic_flow_channels[1].data, optic_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(optic_x, optic_flow_x.data(), optic_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(optic_y, optic_flow_y.data(), optic_bytes, cudaMemcpyHostToDevice);
 
     // reset iwe
     const int threads_per_block_iwe = 64;
@@ -156,9 +155,9 @@ Mat iwe_cuda_warp(vector<float> evt_x, vector<float> evt_y, vector<uint8_t> evt_
 
     delete[] evt_y_host;
     // copy iwe to CPU
-    Mat iwe_mat = cv::Mat::zeros(height, width, CV_32F);
-    cudaMemcpy(iwe_mat.data, iwe, iwe_bytes, cudaMemcpyDeviceToHost);
-    
+    Eigen::MatrixXf iwe_mat = Eigen::MatrixXf::Zero(height, width);
+
+    cudaMemcpy(iwe_mat.data(), iwe, iwe_bytes, cudaMemcpyDeviceToHost);
 
     // free memory
     cudaFree(evt_x_d);

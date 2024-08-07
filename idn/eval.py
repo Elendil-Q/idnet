@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'loader'))
 sys.path.append(os.path.join(os.path.dirname(__file__), 'model'))
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 sys.path.append(os.path.join(os.path.dirname(__file__), 'tests'))
+
 os.environ['HYDRA_FULL_ERROR'] = '1'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 

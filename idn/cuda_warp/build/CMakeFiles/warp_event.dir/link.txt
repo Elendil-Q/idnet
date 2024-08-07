@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -flto -shared  -o warp_event.cpython-38-x86_64-linux-gnu.so CMakeFiles/warp_event.dir/warp_event.cpp.o   -L/usr/local/lib  -Wl,-rpath,/usr/local/lib libcuda_utils_lib.a /home/elendil/anaconda3/envs/IDNet/lib/libcudart_static.a -lpthread -ldl /usr/lib/x86_64-linux-gnu/librt.so 

@@ -55,9 +55,7 @@ class ResidualBlock(nn.Module):
         if self.downsample is not None:
             x = self.downsample(x)
 
-        return self.relu(x+y)
-
-
+        return self.relu(x + y)
 
 
 class LiteEncoder(nn.Module):
@@ -71,15 +69,14 @@ class LiteEncoder(nn.Module):
         self.in_planes = output_dim
         if stride == 2:
             self.layer1 = self._make_layer(output_dim, stride=2)
-            self.layer2 = self._make_layer(output_dim*2, stride=2)
+            self.layer2 = self._make_layer(output_dim * 2, stride=2)
 
         elif stride == 1:
-            self.layer1 = self._make_layer(output_dim*2, stride=2)
-            self.layer2 = self._make_layer(output_dim*2, stride=1)
-        
+            self.layer1 = self._make_layer(output_dim * 2, stride=2)
+            self.layer2 = self._make_layer(output_dim * 2, stride=1)
+
         else:
             raise ValueError('stride must be 1 or 2')
-
 
         self.dropout = None
         if dropout > 0:
@@ -123,4 +120,3 @@ class LiteEncoder(nn.Module):
         if is_list:
             x = torch.split(x, [batch_dim, batch_dim], dim=0)
         return x
-

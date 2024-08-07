@@ -59,14 +59,14 @@ class Logger:
             if isinstance(batch, list):
                 batch = batch[-1]
             assert isinstance(out, dict)
-            if 'save_submission' in batch:
-                if isinstance(batch['save_submission'], torch.Tensor):
-                    batch['save_submission'] = batch['save_submission'].cpu().item()
-                if batch['save_submission'] or save_all:
-                    self.save_submission(out['final_prediction'],
-                                         batch['file_index'].cpu().item())
+            # if 'save_submission' in batch:
+            #     if isinstance(batch['save_submission'], torch.Tensor):
+            #         batch['save_submission'] = batch['save_submission'].cpu().item()
+            #     if batch['save_submission'] or save_all:
+            #         self.save_submission(out['final_prediction'],
+            #                              batch['file_index'].cpu().item())
 
-            self.save_iwe(out['next_flow'], batch['events_rect'], batch['file_index'].cpu().item())
+            self.save_iwe(out['next_flow'], batch['events_old'], batch['file_index'].cpu().item())
 
             if getattr(self.config, "saved_tensors", None) is None:
                 return
@@ -109,7 +109,7 @@ class Logger:
                 return
 
         def save_iwe(self, flow, events, file_idx):
-            iwe = warp_events(flow, events, (480, 640), flow_scaling=1)
+            iwe = warp_events(flow, events, (480, 640), flow_scaling=1, round_idx=False)
             # iwe = np.clip(iwe, 0, 255)
             iwe = (iwe - np.min(iwe)) / (np.max(iwe) - np.min(iwe)) * 255
             iwe = iwe.astype(np.uint8)

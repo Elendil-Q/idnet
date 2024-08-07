@@ -17,7 +17,7 @@ class IDEDEQIDO(nn.Module):
         self.input_flowmap = getattr(config, 'input_flowmap', False)
         self.pred_next_flow = getattr(config, 'pred_next_flow', False)
         self.fnet = LiteEncoder(
-            output_dim=self.input_dim//2, dropout=0, n_first_channels=2, stride=2 if self.downsample == 8 else 1)
+            output_dim=self.input_dim // 2, dropout=0, n_first_channels=2, stride=2 if self.downsample == 8 else 1)
         self.update_net = LiteUpdateBlock(
             hidden_dim=self.hidden_dim, input_dim=self.input_dim,
             num_outputs=2 if self.pred_next_flow else 1,
@@ -42,7 +42,7 @@ class IDEDEQIDO(nn.Module):
         """ Upsample flow field [H/8, W/8, 2] -> [H, W, 2] using convex combination """
         N, _, H, W = flow.shape
         _, D, H, W = mask.shape
-        upsample_ratio = int(sqrt(D/9))
+        upsample_ratio = int(sqrt(D / 9))
         mask = mask.view(N, 1, 9, upsample_ratio, upsample_ratio, H, W)
         mask = torch.softmax(mask, dim=2)
 
@@ -51,7 +51,7 @@ class IDEDEQIDO(nn.Module):
 
         up_flow = torch.sum(mask * up_flow, dim=2)
         up_flow = up_flow.permute(0, 1, 4, 2, 5, 3)
-        return up_flow.reshape(N, 2, upsample_ratio*H, upsample_ratio*W)
+        return up_flow.reshape(N, 2, upsample_ratio * H, upsample_ratio * W)
 
     @staticmethod
     def upflow8(flow, mode='bilinear'):
@@ -72,14 +72,14 @@ class IDEDEQIDO(nn.Module):
         identity_grid = self.create_identity_grid(H, W, raw.device)
         for t in range(T):
             if self.deblur_mode == "voxel":
-                delta_p = flow*t/(T-1)
+                delta_p = flow * t / (T - 1)
             else:
-                delta_p = flow*((t+0.5)/T)
+                delta_p = flow * ((t + 0.5) / T)
             sampling_grid = identity_grid + torch.movedim(delta_p, 1, -1)
-            sampling_grid[..., 0] = sampling_grid[..., 0] / (W-1) * 2 - 1
-            sampling_grid[..., 1] = sampling_grid[..., 1] / (H-1) * 2 - 1
+            sampling_grid[..., 0] = sampling_grid[..., 0] / (W - 1) * 2 - 1
+            sampling_grid[..., 1] = sampling_grid[..., 1] / (H - 1) * 2 - 1
             deblurred_tensor[:, t,
-                             ] = grid_sample(raw[:, t, ], sampling_grid, align_corners=False)
+            ] = grid_sample(raw[:, t, ], sampling_grid, align_corners=False)
         if raw_input.ndim == 4:
             deblurred_tensor = deblurred_tensor.squeeze(2)
         return deblurred_tensor
@@ -123,7 +123,6 @@ class IDEDEQIDO(nn.Module):
         x_deblur_history = x_raw.clone().unsqueeze(1)
         delta_flow_history = delta_flow.clone().unsqueeze(1)
 
-
         x_deblur = x_raw.clone()
         for iter in range(deblur_iters):
             if self.deblur:
@@ -144,15 +143,22 @@ class IDEDEQIDO(nn.Module):
                     else:
                         net = torch.zeros(
                             (B, self.hidden_dim,
-                                H//self.downsample, W//self.downsample)).to(x.device)
+                             H // self.downsample, W // self.downsample)).to(x.device)
                 else:
                     if self.cnet is not None:
                         net = self.cnet(x)
                     else:
                         net = torch.zeros(
                             (B, self.hidden_dim,
-                                H//self.downsample, W//self.downsample)).to(x.device)
+                             H // self.downsample, W // self.downsample)).to(x.device)
+
             for i, slice in enumerate(x.permute(2, 0, 1, 3, 4)):
+                # 用try, except来显示错误信息
+                try:
+                    f = self.fnet(slice)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+
                 f = self.fnet(slice)
                 net = self.update_net(net, f)
 
@@ -175,7 +181,6 @@ class IDEDEQIDO(nn.Module):
             flow_history = torch.cat(
                 [flow_history, flow_total.unsqueeze(1)], dim=1)
 
-
         if self.co_mode:
             if self.pred_next_flow:
                 assert 'next_flow' in locals()
@@ -193,7 +198,7 @@ class IDEDEQIDO(nn.Module):
 
     def forward_flowmap(self, event_bins, flow_init=None, deblur_iters=None):
         deblur_iters = self.deblur_iters if deblur_iters is None else deblur_iters
-        
+
         x = event_bins["event_volume_new"]
 
         B, V, H, W = x.shape
@@ -206,12 +211,12 @@ class IDEDEQIDO(nn.Module):
         for _ in range(deblur_iters):
             x_deblur = self.deblur_tensor(x, delta_flow)
             x = torch.stack([x_deblur, x_deblur], dim=1)
-            
+
             if flow_init is not None and self.cnet is not None:
                 net = self.cnet(flow_total)
             else:
                 net = torch.zeros(
-                    (B, self.hidden_dim, H//8, W//8)).to(x.device)
+                    (B, self.hidden_dim, H // 8, W // 8)).to(x.device)
             for i, slice in enumerate(x.permute(2, 0, 1, 3, 4)):
                 f = self.fnet(slice)
                 net = self.update_net(net, f)
@@ -220,10 +225,9 @@ class IDEDEQIDO(nn.Module):
             up_mask = self.update_net.compute_up_mask(net)
             delta_flow = self.upsample_flow(dflow, up_mask)
             flow_total = flow_total + delta_flow
-            
+
             flow_history = torch.cat(
                 [flow_history, flow_total.unsqueeze(1)], dim=1)
-
 
         return {'final_prediction': flow_total,
                 'flow_history': flow_history}
@@ -248,10 +252,10 @@ class RecIDE(IDEDEQIDO):
                 flow_next_trajectory.append(flow_next)
             else:
                 flow_init = self.forward_flow(flow_pred)
-            
+
             flow_trajectory.append(flow_pred)
 
-            if (t+1) % 4 == 0:
+            if (t + 1) % 4 == 0:
                 flow_init = flow_init.detach()
                 yield {'final_prediction': flow_pred,
                        'flow_trajectory': flow_trajectory,
@@ -261,7 +265,6 @@ class RecIDE(IDEDEQIDO):
 
     def forward_inference(self, batch, flow_init=None, deblur_iters=None):
         deblur_iters = self.deblur_iters if deblur_iters is None else deblur_iters
-        
 
         flow_trajectory = []
 

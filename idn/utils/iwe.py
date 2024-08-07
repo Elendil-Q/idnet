@@ -1,6 +1,7 @@
 import torch
 from events2img import EventImageConverter
 import numpy as np
+from cuda_warp import iwe_cuda, free_gpu_memory
 
 
 def purge_unfeasible(x, res):
@@ -38,13 +39,10 @@ def get_interpolation(events, flow, tref, res, flow_scaling, round_idx=False):
     warped_events = events[:, :, 0:2] + (tref - events[:, :, 2:3]) * flow * flow_scaling
 
     if round_idx:
-
         # no bilinear interpolation
         idx = torch.round(warped_events)
         weights = torch.ones(idx.shape).to(events.device)
-
     else:
-
         # get scattering indices
         top_y = torch.floor(warped_events[:, :, 0:1])
         bot_y = torch.floor(warped_events[:, :, 0:1] + 1)
@@ -88,7 +86,14 @@ def interpolate(idx, weights, res, polarity_mask=None):
     if polarity_mask is not None:
         weights = weights * polarity_mask
     iwe = torch.zeros((idx.shape[0], res[0] * res[1], 1)).to(idx.device)
-    iwe = iwe.scatter_add_(1, idx.long(), weights)
+    # iwe的数据类型设为与weights相同
+    iwe = iwe.type_as(weights)
+
+    try:
+        iwe = iwe.scatter_add_(1, idx.long(), weights)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
     iwe = iwe.view((idx.shape[0], 1, res[0], res[1]))
     return iwe
 
@@ -162,30 +167,49 @@ def compute_pol_iwe(flow, event_list, res, pos_mask, neg_mask, flow_scaling=128,
 
 def warp_events(flow, event_list, res, flow_scaling=128, round_idx=True) -> np.ndarray:
     """
-
     Args:
         flow:
         event_list: [y,x,t,p]
         res: [h,w]
         flow_scaling:
         round_idx:
-
     Returns:
     """
     pos_mask = (event_list[:, :, 3:4] > 0).float()
     neg_mask = (event_list[:, :, 3:4] <= 0).float()
+
+    # # 按照极性划分事件
+    # pos_idx = torch.nonzero(pos_mask, as_tuple=False)
+    # neg_idx = torch.nonzero(neg_mask, as_tuple=False)
+    # event_pos = event_list[pos_idx[:, 0], pos_idx[:, 1]]
+    # event_neg = event_list[neg_idx[:, 0], neg_idx[:, 1]]
+    #
+    # # 转为numpy
+    # if torch.is_tensor(flow):
+    #     # [1,2,h,w]-->[h,w,2]
+    #     flow = flow.squeeze().permute(1, 2, 0).cpu().numpy()
+    #
+    # if torch.is_tensor(event_pos):
+    #     event_pos = event_pos.squeeze().cpu().numpy()
+    # if torch.is_tensor(event_neg):
+    #     event_neg = event_neg.squeeze().cpu().numpy()
+    #
+    # iwe_p = iwe_cuda(flow, event_pos, res)
+    # iwe_n = iwe_cuda(flow, event_neg, res)
+
     iwe_p = deblur_events(flow, event_list, res, flow_scaling=flow_scaling, round_idx=round_idx, polarity_mask=pos_mask)
     iwe_n = deblur_events(flow, event_list, res, flow_scaling=flow_scaling, round_idx=round_idx, polarity_mask=neg_mask)
+    #
+    # # normalize and convert to numpy
+    # iwe_p = iwe_p.squeeze()
+    # iwe_n = iwe_n.squeeze()
+    # iwe_p = (iwe_p - torch.min(iwe_p)) / (torch.max(iwe_p) - torch.min(iwe_p)) * 0.5
+    # iwe_n = (iwe_n - torch.min(iwe_n)) / (torch.max(iwe_n) - torch.min(iwe_n)) * 0.5
 
-    # normalize and convert to numpy
-    iwe_p = iwe_p.squeeze()
-    iwe_n = iwe_n.squeeze()
-    iwe_p = (iwe_p - torch.min(iwe_p)) / (torch.max(iwe_p) - torch.min(iwe_p)) * 0.5
-    iwe_n = (iwe_n - torch.min(iwe_n)) / (torch.max(iwe_n) - torch.min(iwe_n)) * 0.5
-
-    iwe = iwe_p - iwe_n + 0.5
-    max_val = torch.max(iwe)
-    min_val = torch.min(iwe)
+    iwe = iwe_p + iwe_n
+    # max_val = torch.max(iwe)
+    # min_val = torch.min(iwe)
     if torch.is_tensor(iwe):
         iwe = iwe.cpu().squeeze().numpy()
+
     return iwe

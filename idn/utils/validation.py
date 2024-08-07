@@ -20,7 +20,6 @@ def log_tensors(idx, dict_of_tensors, tmp_folder):
             continue
 
 
-
 class Validator:
     def __init__(self, config):
         self.test = dict()

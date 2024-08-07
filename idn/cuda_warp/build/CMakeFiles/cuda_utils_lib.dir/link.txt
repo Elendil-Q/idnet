@@ -1,0 +1,2 @@
+/usr/bin/ar qc libcuda_utils_lib.a CMakeFiles/cuda_utils_lib.dir/cuda_utils_lib_generated_cuda_utils.cu.o
+/usr/bin/ranlib libcuda_utils_lib.a
