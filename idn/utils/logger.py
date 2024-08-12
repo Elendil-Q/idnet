@@ -9,7 +9,7 @@ import torch
 from contextlib import contextmanager, nullcontext
 from tests.eval import fm
 from utils.iwe import warp_events, compute_pol_iwe
-
+import cv2
 
 class Logger:
     def __init__(self, config, test_name):
@@ -66,7 +66,7 @@ class Logger:
             #         self.save_submission(out['final_prediction'],
             #                              batch['file_index'].cpu().item())
 
-            self.save_iwe(out['next_flow'], batch['events_old'], batch['file_index'].cpu().item())
+            self.save_iwe(out['final_prediction'], batch['events_old'], batch['file_index'].cpu().item())
 
             if getattr(self.config, "saved_tensors", None) is None:
                 return
@@ -111,13 +111,17 @@ class Logger:
         def save_iwe(self, flow, events, file_idx):
             iwe = warp_events(flow, events, (480, 640), flow_scaling=1, round_idx=False)
             # iwe = np.clip(iwe, 0, 255)
-            iwe = (iwe - np.min(iwe)) / (np.max(iwe) - np.min(iwe)) * 255
+            iwe = (iwe - np.min(iwe)) / (np.max(iwe) - np.min(iwe))
+            iwe = iwe * 255
             iwe = iwe.astype(np.uint8)
+
+            # 直方图均衡化
+            iwe = cv2.equalizeHist(iwe)
 
             save_dir = os.path.join(self.path, "iwe")
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
-            imageio.imwrite(os.path.join(save_dir, f"{file_idx:06d}.png"),
+            imageio.imwrite(os.path.join(save_dir, f"{file_idx:06d}.jpg"),
                             iwe.astype(np.uint8))
 
         def log_metrics(self, results):

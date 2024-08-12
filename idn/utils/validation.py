@@ -191,3 +191,4 @@ def validate_model(data_loader, model, config, return_dict, gpu_id, test_mode=Fa
     if log_dir:
         with open(os.path.join(log_dir, "metrics.pkl"), "wb") as f:
             pickle.dump(metrics, f)
+

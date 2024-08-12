@@ -7,8 +7,8 @@ from typing import Union
 
 from requests import get
 
-TEST_SEQUENCES = ['interlaken_00_b', 'interlaken_01_a', 'thun_01_a',
-                  'thun_01_b', 'zurich_city_12_a', 'zurich_city_14_c', 'zurich_city_15_a']
+TEST_SEQUENCES = ['interlaken_00_b', 'interlaken_01_a', 'thun_01_a', 'thun_01_b', 'zurich_city_12_a',
+                  'zurich_city_14_c', 'zurich_city_15_a']
 BASE_TEST_URL = 'https://download.ifi.uzh.ch/rpg/DSEC/test/'
 TEST_FLOW_TIMESTAMPS_URL = 'https://download.ifi.uzh.ch/rpg/DSEC/test_forward_optical_flow_timestamps.zip'
 
@@ -48,8 +48,7 @@ if __name__ == '__main__':
 
     test_timestamps_file = output_dir / 'test_forward_flow_timestamps.zip'
 
-    assert download(TEST_FLOW_TIMESTAMPS_URL,
-                    test_timestamps_file), TEST_FLOW_TIMESTAMPS_URL
+    assert download(TEST_FLOW_TIMESTAMPS_URL, test_timestamps_file), TEST_FLOW_TIMESTAMPS_URL
     test_timestamps_dir = unzip(test_timestamps_file)
 
     for seq_name in TEST_SEQUENCES:
@@ -57,18 +56,15 @@ if __name__ == '__main__':
         os.makedirs(seq_path, exist_ok=True)
 
         # image timestamps
-        img_timestamps_url = BASE_TEST_URL + seq_name + \
-            '/' + seq_name + '_image_timestamps.txt'
+        img_timestamps_url = BASE_TEST_URL + seq_name + '/' + seq_name + '_image_timestamps.txt'
         img_timestamps_file = seq_path / 'image_timestamps.txt'
         if not img_timestamps_file.exists():
-            assert download(img_timestamps_url,
-                            img_timestamps_file), img_timestamps_url
+            assert download(img_timestamps_url, img_timestamps_file), img_timestamps_url
 
         # test timestamps
         test_timestamps_file_destination = seq_path / 'test_forward_flow_timestamps.csv'
         if not test_timestamps_file_destination.exists():
-            shutil.move(test_timestamps_dir / (seq_name + '.csv'),
-                        test_timestamps_file_destination)
+            shutil.move(test_timestamps_dir / (seq_name + '.csv'), test_timestamps_file_destination)
 
         # event data
         events_left_url = BASE_TEST_URL + seq_name + '/' + seq_name + '_events_left.zip'

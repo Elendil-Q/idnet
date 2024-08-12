@@ -191,7 +191,7 @@ class Sequence(Dataset):
         assert num_bins >= 1
         assert delta_t_ms == 100
         assert seq_path.is_dir()
-        assert mode in {'train', 'test'}
+        assert mode in {'train', 'test', 'infer'}
         '''
         Directory Structure:
 
@@ -211,70 +211,103 @@ class Sequence(Dataset):
         self.visualize_samples = visualize
         self.load_gt = load_gt
         self.transforms = transforms
-        if self.mode is "test":
-            # Get Test Timestamp File
-            ev_dir_location = seq_path / 'events_left'
-            timestamp_file = seq_path / 'test_forward_flow_timestamps.csv'
-            flow_path = seq_path
-            timestamps_images = np.loadtxt(
-                flow_path / 'image_timestamps.txt', dtype='int64')
-            self.indices = np.arange(len(timestamps_images))[::2][1:-1]
-            self.timestamps_flow = timestamps_images[::2][1:-1]
+        if self.mode in ['train', 'test']:
+            if self.mode is "test":
+                # Get Test Timestamp File
+                ev_dir_location = seq_path / 'events_left'
+                timestamp_file = seq_path / 'test_forward_flow_timestamps.csv'
+                flow_path = seq_path
+                timestamps_images = np.loadtxt(
+                    flow_path / 'image_timestamps.txt', dtype='int64')
+                self.indices = np.arange(len(timestamps_images))[::2][1:-1]
+                self.timestamps_flow = timestamps_images[::2][1:-1]
 
-        elif self.mode is "train":
+            elif self.mode is "train":
+                ev_dir_location = seq_path / 'events' / 'left'
+                seq_name = seq_path.parts[-1]
+                flow_path = seq_path.parents[1] / \
+                            "train_optical_flow" / seq_name / 'flow'
+                timestamp_file = flow_path / 'forward_timestamps.txt'
+                self.flow_png = [Path(os.path.join(flow_path / 'forward', img)) for img in sorted(
+                    os.listdir(flow_path / 'forward'))]
+                timestamps_images = np.loadtxt(
+                    flow_path / 'forward_timestamps.txt', delimiter=',', dtype='int64')
+                self.indices = np.arange(len(timestamps_images) - 1)
+                self.timestamps_flow = timestamps_images[1:, 0]
+            else:
+                pass
+            assert timestamp_file.is_file()
+
+            file = np.genfromtxt(
+                timestamp_file,
+                delimiter=','
+            )
+
+            self.idx_to_visualize = file[:, 2] if file.shape[1] == 3 else []
+
+            # Save output dimensions
+            self.height = 480
+            self.width = 640
+            self.num_bins = num_bins
+
+            # Just for now, we always train with num_bins=15
+            assert self.num_bins == 15
+
+            # Set event representation
+            self.voxel_grid = None
+            if representation_type == RepresentationType.VOXEL:
+                self.voxel_grid = VoxelGrid(
+                    (self.num_bins, self.height, self.width), normalize=True)
+            if representation_type == "count":
+                self.voxel_grid = "count"
+            if representation_type == "pcount":
+                self.voxel_grid = PolarityCount((2, self.height, self.width))
+
+            # Save delta timestamp in ms
+            self.delta_t_us = delta_t_ms * 1000
+
+            # Left events only
+            ev_data_file = ev_dir_location / 'events.h5'
+            ev_rect_file = ev_dir_location / 'rectify_map.h5'
+
+            h5f_location = h5py.File(str(ev_data_file), 'r')
+            self.h5f = h5f_location
+            self.event_slicer = EventSlicer(h5f_location)
+
+            self.h5rect = h5py.File(str(ev_rect_file), 'r')
+            self.rectify_ev_map = self.h5rect['rectify_map'][()]
+
+        elif self.mode == 'infer':
+            self.seq_name = PurePath(seq_path).name
+            self.mode = mode
+            self.name_idx = name_idx
+            self.delta_t_us = delta_t_ms * 1000
+            self.height = 480
+            self.width = 640
+            self.num_bins = num_bins
+
             ev_dir_location = seq_path / 'events' / 'left'
-            seq_name = seq_path.parts[-1]
-            flow_path = seq_path.parents[1] / \
-                        "train_optical_flow" / seq_name / 'flow'
-            timestamp_file = flow_path / 'forward_timestamps.txt'
-            self.flow_png = [Path(os.path.join(flow_path / 'forward', img)) for img in sorted(
-                os.listdir(flow_path / 'forward'))]
-            timestamps_images = np.loadtxt(
-                flow_path / 'forward_timestamps.txt', delimiter=',', dtype='int64')
-            self.indices = np.arange(len(timestamps_images) - 1)
-            self.timestamps_flow = timestamps_images[1:, 0]
-        else:
-            pass
-        assert timestamp_file.is_file()
+            ev_data_file = ev_dir_location / 'events.h5'
+            ev_rect_file = ev_dir_location / 'rectify_map.h5'
+            # Set event representation
+            self.voxel_grid = None
+            if representation_type == RepresentationType.VOXEL:
+                self.voxel_grid = VoxelGrid(
+                    (self.num_bins, self.height, self.width), normalize=True)
+            if representation_type == "count":
+                self.voxel_grid = "count"
+            if representation_type == "pcount":
+                self.voxel_grid = PolarityCount((2, self.height, self.width))
+            h5f_location = h5py.File(str(ev_data_file), 'r')
+            self.h5f = h5f_location
+            self.event_slicer = EventSlicer(h5f_location)
 
-        file = np.genfromtxt(
-            timestamp_file,
-            delimiter=','
-        )
-
-        self.idx_to_visualize = file[:, 2] if file.shape[1] == 3 else []
-
-        # Save output dimensions
-        self.height = 480
-        self.width = 640
-        self.num_bins = num_bins
-
-        # Just for now, we always train with num_bins=15
-        assert self.num_bins == 15
-
-        # Set event representation
-        self.voxel_grid = None
-        if representation_type == RepresentationType.VOXEL:
-            self.voxel_grid = VoxelGrid(
-                (self.num_bins, self.height, self.width), normalize=True)
-        if representation_type == "count":
-            self.voxel_grid = "count"
-        if representation_type == "pcount":
-            self.voxel_grid = PolarityCount((2, self.height, self.width))
-
-        # Save delta timestamp in ms
-        self.delta_t_us = delta_t_ms * 1000
-
-        # Left events only
-        ev_data_file = ev_dir_location / 'events.h5'
-        ev_rect_file = ev_dir_location / 'rectify_map.h5'
-
-        h5f_location = h5py.File(str(ev_data_file), 'r')
-        self.h5f = h5f_location
-        self.event_slicer = EventSlicer(h5f_location)
-
-        self.h5rect = h5py.File(str(ev_rect_file), 'r')
-        self.rectify_ev_map = self.h5rect['rectify_map'][()]
+            self.edge_jump = 5  # 最开始的和最后的edge_jump_ms ms不要
+            start_time_us = self.event_slicer.t_offset + self.delta_t_us
+            end_time_us = self.event_slicer.get_final_time_us() - self.delta_t_us
+            self.timestamps_flow = np.arange(start_time_us, end_time_us, self.delta_t_us).tolist()
+            self.indices = np.arange(len(self.timestamps_flow))
+            self.idx_to_visualize = self.indices
 
     def events_to_voxel_grid(self, p, t, x, y, device: str = 'cpu'):
         t = (t - t[0]).astype('float32')
@@ -393,7 +426,7 @@ class Sequence(Dataset):
                 output[names[i]] = event_representation
             output['name_map'] = self.name_idx
             t = (t - np.min(t)) / (np.max(t) - np.min(t))
-            if i == 1:
+            if i == 0:
                 output['events_old'] = np.stack([y_rect, x_rect, t, p], axis=1)
 
             if self.load_gt:
@@ -559,6 +592,7 @@ class SequenceRecurrent(Sequence):
         j = valid_idx
 
         ts_cur = self.timestamps_flow[j]
+
         # Add first sample
         sample = self.get_data_sample(j)
         sequence.append(sample)
@@ -607,13 +641,219 @@ class SequenceRecurrent(Sequence):
         return sequence
 
 
+class SequenceInfer(Dataset):
+    """
+    Pure Inference, No need to think about evaluation with gt flow
+    """
+
+    def __init__(self, seq_path: Path, representation_type: RepresentationType, mode: str = 'test',
+                 delta_t_ms: int = 100,
+                 num_bins: int = 15, transforms=[], name_idx=0, visualize=False, load_gt=False, edge_jump_ms=5):
+        assert num_bins >= 1
+        # assert delta_t_ms == 100
+        assert seq_path.is_dir()
+        self.seq_name = PurePath(seq_path).name
+        self.mode = mode
+        self.name_idx = name_idx
+        self.delta_t_us = delta_t_ms * 1000
+        self.height = 480
+        self.width = 640
+        self.num_bins = num_bins
+
+        ev_data_file = seq_path / 'events' / 'left' / 'events.h5'
+        # Set event representation
+        self.voxel_grid = None
+        if representation_type == RepresentationType.VOXEL:
+            self.voxel_grid = VoxelGrid(
+                (self.num_bins, self.height, self.width), normalize=True)
+        if representation_type == "count":
+            self.voxel_grid = "count"
+        if representation_type == "pcount":
+            self.voxel_grid = PolarityCount((2, self.height, self.width))
+        h5f_location = h5py.File(str(ev_data_file), 'r')
+        self.h5f = h5f_location
+        self.event_slicer = EventSlicer(h5f_location)
+
+        self.edge_jump = edge_jump_ms  # 最开始的和最后的edge_jump_ms ms不要
+        start_time_us = self.event_slicer.t_offset + edge_jump_ms * 1000
+        end_time_us = self.event_slicer.get_final_time_us() - edge_jump_ms * 1000
+        self.timestamps_flow = np.arange(start_time_us, end_time_us, self.delta_t_us).tolist()
+
+    def events_to_voxel_grid(self, p, t, x, y, device: str = 'cpu'):
+        t = (t - t[0]).astype('float32')
+        t = (t / t[-1])
+        x = x.astype('float32')
+        y = y.astype('float32')
+        pol = p.astype('float32')
+        event_data_torch = {
+            'p': torch.from_numpy(pol),
+            't': torch.from_numpy(t),
+            'x': torch.from_numpy(x),
+            'y': torch.from_numpy(y),
+        }
+        return self.voxel_grid.convert(event_data_torch)
+
+    def getHeightAndWidth(self):
+        return self.height, self.width
+
+    def __len__(self):
+        return self.timestamps_flow.shape[0]
+
+    def get_data_sample(self, index, crop_window=None, flip=None):
+        # First entry corresponds to all events BEFORE the flow map
+        # Second entry corresponds to all events AFTER the flow map (corresponding to the actual fwd flow)
+        names = ['event_volume_old', 'event_volume_new']
+        ts_start = [self.timestamps_flow[index] -
+                    self.delta_t_us, self.timestamps_flow[index]]
+        ts_end = [self.timestamps_flow[index],
+                  self.timestamps_flow[index] + self.delta_t_us]
+
+        file_index = index
+
+        output = {
+            'file_index': file_index,
+            'timestamp': self.timestamps_flow[index],
+            'seq_name': self.seq_name
+        }
+
+        for i in range(len(names)):
+            event_data = self.event_slicer.get_events(
+                ts_start[i], ts_end[i])
+
+            p = event_data['p']
+            t = event_data['t']
+            x = event_data['x']
+            y = event_data['y']
+
+            xy_rect = np.stack([x, y], axis=1)
+            x_rect = xy_rect[:, 0]
+            y_rect = xy_rect[:, 1]
+
+            if crop_window is not None:
+                # Cropping (+- 2 for safety reasons)
+                x_mask = (x_rect >= crop_window['start_x'] - 2) & (
+                        x_rect < crop_window['start_x'] + crop_window['crop_width'] + 2)
+                y_mask = (y_rect >= crop_window['start_y'] - 2) & (
+                        y_rect < crop_window['start_y'] + crop_window['crop_height'] + 2)
+                mask_combined = x_mask & y_mask
+                p = p[mask_combined]
+                t = t[mask_combined]
+            else:
+                x_mask = (x_rect >= 0) & (
+                        x_rect <= self.width - 1)
+                y_mask = (y_rect >= 0) & (
+                        y_rect < self.height - 1)
+                mask_combined = x_mask & y_mask
+                p = p[mask_combined]
+                t = t[mask_combined]
+
+                # norm
+                # t = (t - np.min(t)) / (np.max(t) - np.min(t))
+
+                x_rect = x_rect[mask_combined]
+                y_rect = y_rect[mask_combined]
+
+            if self.voxel_grid is None:
+                raise NotImplementedError
+            else:
+                event_representation = self.events_to_voxel_grid(
+                    p, t, x_rect, y_rect)
+                output[names[i]] = event_representation
+            output['name_map'] = self.name_idx
+            t = (t - np.min(t)) / (np.max(t) - np.min(t))
+            if i == 0:
+                output['events_old'] = np.stack([y_rect, x_rect, t, p], axis=1)
+
+        return output
+
+    def __getitem__(self, idx):
+        sample = self.get_data_sample(idx)
+        return sample
+
+    def get_voxel_grid(self, idx):
+
+        if idx == 0:
+            event_data = self.event_slicer.get_events(
+                self.timestamps_flow[0] - self.delta_t_us, self.timestamps_flow[0])
+        elif 0 < idx <= self.__len__():
+            event_data = self.event_slicer.get_events(
+                self.timestamps_flow[idx - 1], self.timestamps_flow[idx - 1] + self.delta_t_us)
+        else:
+            raise IndexError
+
+        p = event_data['p']
+        t = event_data['t']
+        x = event_data['x']
+        y = event_data['y']
+
+        xy_rect = np.stack([x, y], axis=1)
+        x_rect = xy_rect[:, 0]
+        y_rect = xy_rect[:, 1]
+        return self.events_to_voxel_grid(p, t, x_rect, y_rect)
+
+    def get_event_count_image(self, ts_start, ts_end, num_bins=15, normalize=True):
+        assert ts_end > ts_start
+        delta_t_bin = (ts_end - ts_start) / num_bins
+        ts_start_bin = np.linspace(
+            ts_start, ts_end, num=num_bins, endpoint=False)
+        ts_end_bin = ts_start_bin + delta_t_bin
+        assert abs(ts_end_bin[-1] - ts_end) < 10.
+        ts_end_bin[-1] = ts_end
+
+        event_count = torch.zeros(
+            (num_bins, self.height, self.width), dtype=torch.float, requires_grad=False)
+
+        for i in range(num_bins):
+            event_data = self.event_slicer.get_events(
+                ts_start_bin[i], ts_end_bin[i])
+            p = event_data['p']
+            t = event_data['t']
+            x = event_data['x']
+            y = event_data['y']
+
+            t = (t - t[0]).astype('float32')
+            t = (t / t[-1])
+            x = x.astype('float32')
+            y = y.astype('float32')
+            pol = p.astype('float32')
+            event_data_torch = {
+                'p': torch.from_numpy(pol),
+                't': torch.from_numpy(t),
+                'x': torch.from_numpy(x),
+                'y': torch.from_numpy(y),
+            }
+            x = event_data_torch['x']
+            y = event_data_torch['y']
+            xy_rect = np.stack([x.int(), y.int()], axis=1)
+            x_rect = torch.from_numpy(xy_rect[:, 0]).long()
+            y_rect = torch.from_numpy(xy_rect[:, 1]).long()
+            value = 2 * event_data_torch['p'] - 1
+            index = self.width * y_rect + x_rect
+            mask = (x_rect < self.width) & (y_rect < self.height)
+            event_count[i].put_(index[mask], value[mask], accumulate=True)
+
+        return event_count
+
+    @staticmethod
+    def normalize_tensor(event_count):
+        mask = torch.nonzero(event_count, as_tuple=True)
+        if mask[0].size()[0] > 0:
+            mean = event_count[mask].mean()
+            std = event_count[mask].std()
+            if std > 0:
+                event_count[mask] = (event_count[mask] - mean) / std
+            else:
+                event_count[mask] = event_count[mask] - mean
+        return event_count
+
+
 class DatasetProvider:
     def __init__(self, dataset_path: Path, representation_type: RepresentationType, delta_t_ms: int = 100, num_bins=15,
                  type='standard', config=None, visualize=False):
         test_path = dataset_path / 'test'
         assert dataset_path.is_dir(), str(dataset_path)
         assert test_path.is_dir(), str(test_path)
-        assert delta_t_ms == 100
+        # assert delta_t_ms == 100
         self.config = config
         self.name_mapper_test = []
 
@@ -726,8 +966,9 @@ def assemble_dsec_test_set(test_set_root, seq_len=None, concat_seq=False, repres
         extra_arg = dict(
             sequence_length=seq_len) if dataset_cls == SequenceRecurrent else dict()
         seqs.append(dataset_cls(Path(test_set_root) / seq,
-                                representation_type, mode='test',
+                                representation_type, mode='infer',
                                 load_gt=False, transforms=transforms, **extra_arg))
+
     if concat_seq:
         return torch.utils.data.ConcatDataset(seqs)
     else:

@@ -1,4 +1,5 @@
 dataset_name: dsec
 common:
   data_root: /home/elendil/DATA/DESC/
-  test_root: /home/elendil/DATA/DESC/test/
+  test_root: /home/elendil/DATA/DESC/test_events/
+#  test_root: /home/elendil/DATA/DESC/test/

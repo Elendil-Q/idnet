@@ -199,6 +199,7 @@ def warp_events(flow, event_list, res, flow_scaling=128, round_idx=True) -> np.n
 
     iwe_p = deblur_events(flow, event_list, res, flow_scaling=flow_scaling, round_idx=round_idx, polarity_mask=pos_mask)
     iwe_n = deblur_events(flow, event_list, res, flow_scaling=flow_scaling, round_idx=round_idx, polarity_mask=neg_mask)
+    # iwe = deblur_events(flow, event_list, res, flow_scaling=flow_scaling, round_idx=round_idx, polarity_mask=None)
     #
     # # normalize and convert to numpy
     # iwe_p = iwe_p.squeeze()

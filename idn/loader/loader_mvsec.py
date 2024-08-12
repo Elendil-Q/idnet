@@ -10,9 +10,10 @@ from idn.utils.mvsec_utils import EventSequence
 from idn.utils.dsec_utils import RepresentationType, VoxelGrid
 from idn.utils.transformers import EventSequenceToVoxelGrid_Pytorch, apply_randomcrop_to_sample
 
+
 class MVSEC(Dataset):
     def __init__(self, seq_name, seq_path="data/", representation_type=None, \
-        rate=20, num_bins=5, transforms=[], filter=None, augment=True, dt=None):
+                 rate=20, num_bins=5, transforms=[], filter=None, augment=True, dt=None):
         self.seq_name = seq_name
         self.dt = dt
         if self.dt is None:
@@ -29,15 +30,15 @@ class MVSEC(Dataset):
             self.gt_flow = list(self.h5['flow']['dt={}'.format(self.dt)].keys())
             self.gt_flow.remove('timestamps')
             assert sorted(self.gt_flow) == self.gt_flow
-        
+
         if representation_type is None:
             self.representation_type = VoxelGrid
         else:
             self.representation_type = representation_type
-        
+
         if filter is not None:
-            assert isinstance(filter, tuple) and isinstance(filter[0], int)\
-                and isinstance(filter[1], int)
+            assert isinstance(filter, tuple) and isinstance(filter[0], int) \
+                   and isinstance(filter[1], int)
             self.timestamps = self.timestamps[slice(*filter)]
             self.gt_flow = self.gt_flow[slice(*filter)]
 
@@ -61,63 +62,62 @@ class MVSEC(Dataset):
         sample = {}
         if self.dt is None:
             # get events
-            events = self.event[self.event_ts_to_idx[idx-1]:self.event_ts_to_idx[idx]]
+            events = self.event[self.event_ts_to_idx[idx - 1]:self.event_ts_to_idx[idx]]
             events = events[:, [2, 0, 1, 3]]  # make it (t, x, y, p)
             sample["event_volume_old"] = \
                 self.voxel(EventSequence(events,
-                                     params={'width': self.image_width,
-                                             'height': self.image_height},
-                                     timestamp_multiplier=1e6,
-                                     convert_to_relative=True,
-                                     features=events))
-            
+                                         params={'width': self.image_width,
+                                                 'height': self.image_height},
+                                         timestamp_multiplier=1e6,
+                                         convert_to_relative=True,
+                                         features=events))
+
             # get events
-            events = self.event[self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx+1]]
-            events = events[:, [2, 0, 1, 3]] # make it (t, x, y, p)
+            events = self.event[self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx + 1]]
+            events = events[:, [2, 0, 1, 3]]  # make it (t, x, y, p)
 
             sample["event_volume_new"] = \
-                self.voxel(EventSequence(events, 
-                                    params={'width': self.image_width, 
-                                            'height': self.image_height},
-                                    timestamp_multiplier=1e6,
-                                    convert_to_relative=True,
-                                    features = events))
+                self.voxel(EventSequence(events,
+                                         params={'width': self.image_width,
+                                                 'height': self.image_height},
+                                         timestamp_multiplier=1e6,
+                                         convert_to_relative=True,
+                                         features=events))
             # get flow
-            flow = self.gt_flow[idx] # -1 yields the same gt flow as E-RAFT, but likely incorrect
-            flow_next = self.gt_flow[idx+1]
+            flow = self.gt_flow[idx]  # -1 yields the same gt flow as E-RAFT, but likely incorrect
+            flow_next = self.gt_flow[idx + 1]
         else:
-            old_p = self.event['ps'][self.event_ts_to_idx[idx-1]:self.event_ts_to_idx[idx]]
-            old_t = self.event['ts'][self.event_ts_to_idx[idx-1]:self.event_ts_to_idx[idx]]
-            old_x = self.event['xs'][self.event_ts_to_idx[idx-1]:self.event_ts_to_idx[idx]]
-            old_y = self.event['ys'][self.event_ts_to_idx[idx-1]:self.event_ts_to_idx[idx]]
+            old_p = self.event['ps'][self.event_ts_to_idx[idx - 1]:self.event_ts_to_idx[idx]]
+            old_t = self.event['ts'][self.event_ts_to_idx[idx - 1]:self.event_ts_to_idx[idx]]
+            old_x = self.event['xs'][self.event_ts_to_idx[idx - 1]:self.event_ts_to_idx[idx]]
+            old_y = self.event['ys'][self.event_ts_to_idx[idx - 1]:self.event_ts_to_idx[idx]]
 
             old_events = np.column_stack((old_t, old_x, old_y, old_p))
             sample["event_volume_old"] = \
                 self.voxel(EventSequence(old_events,
-                                     params={'width': self.image_width,
-                                             'height': self.image_height},
-                                     timestamp_multiplier=1e6,
-                                     convert_to_relative=True,
-                                     features=old_events))
-            
-            new_p = self.event['ps'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx+1]]
-            new_t = self.event['ts'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx+1]]
-            new_x = self.event['xs'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx+1]]
-            new_y = self.event['ys'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx+1]]
+                                         params={'width': self.image_width,
+                                                 'height': self.image_height},
+                                         timestamp_multiplier=1e6,
+                                         convert_to_relative=True,
+                                         features=old_events))
+
+            new_p = self.event['ps'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx + 1]]
+            new_t = self.event['ts'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx + 1]]
+            new_x = self.event['xs'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx + 1]]
+            new_y = self.event['ys'][self.event_ts_to_idx[idx]:self.event_ts_to_idx[idx + 1]]
 
             new_events = np.column_stack((new_t, new_x, new_y, new_p))
             sample["event_volume_new"] = \
                 self.voxel(EventSequence(new_events,
-                                     params={'width': self.image_width,
-                                             'height': self.image_height},
-                                     timestamp_multiplier=1e6,
-                                     convert_to_relative=True,
-                                     features=new_events))
+                                         params={'width': self.image_width,
+                                                 'height': self.image_height},
+                                         timestamp_multiplier=1e6,
+                                         convert_to_relative=True,
+                                         features=new_events))
 
             # get flow
             flow = np.transpose(self.h5['flow']['dt={}'.format(self.dt)][self.gt_flow[idx]][:], (2, 0, 1))
-            flow_next = np.transpose(self.h5['flow']['dt={}'.format(self.dt)][self.gt_flow[idx+1]][:], (2, 0, 1))
-        
+            flow_next = np.transpose(self.h5['flow']['dt={}'.format(self.dt)][self.gt_flow[idx + 1]][:], (2, 0, 1))
 
         sample["flow_gt_event_volume_new"] = self.process_flow_gt(flow)
         sample["flow_gt_next"] = self.process_flow_gt(flow_next)
@@ -135,7 +135,6 @@ class MVSEC(Dataset):
                         sample[key] = [T.functional.hflip(
                             mask) for mask in sample[key]]
                         sample[key][0][0, :] = -sample[key][0][0, :]
-            
 
         return sample
 
@@ -144,10 +143,10 @@ class MVSEC(Dataset):
         flow_valid[193:, :] = False
         flow = torch.from_numpy(flow)
         valid_mask = torch.from_numpy(
-            np.stack([flow_valid]*1, axis=0))
+            np.stack([flow_valid] * 1, axis=0))
 
         return (self.cropper(flow), self.cropper(valid_mask))
-        
+
     def build_event_idx(self):
         if self.dt is None:
             events_ts = self.event_h5['davis']['left']['events'][:, 2]
@@ -169,10 +168,10 @@ class MVSECRecurrent(MVSEC):
         continuous_seq_idcs = list(
             (range(self.raw_gt_len - 2 - self.sequence_length)))
         return continuous_seq_idcs
-    
+
     def __len__(self):
         return len(self.valid_indices)
-    
+
     def __getitem__(self, idx):
         assert idx >= 0
         assert idx < len(self)
@@ -186,12 +185,10 @@ class MVSECRecurrent(MVSEC):
             sequence.append(sample)
             j += 1
 
-        
         # Check if the current sample is the first sample of a continuous sequence
-        if idx == 0 or self.valid_indices[idx]-self.valid_indices[idx-1] != 1:
+        if idx == 0 or self.valid_indices[idx] - self.valid_indices[idx - 1] != 1:
             sequence[0]['new_sequence'] = 1
         else:
             sequence[0]['new_sequence'] = 0
 
         return sequence
-

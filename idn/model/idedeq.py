@@ -159,7 +159,7 @@ class IDEDEQIDO(nn.Module):
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
-                f = self.fnet(slice)
+                # f = self.fnet(slice)
                 net = self.update_net(net, f)
 
             dflow = self.update_net.compute_deltaflow(net)
