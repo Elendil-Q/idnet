@@ -9,7 +9,9 @@ import torch
 from contextlib import contextmanager, nullcontext
 from tests.eval import fm
 from utils.iwe import warp_events, compute_pol_iwe
+from utils.reconstruction import ImageReconstructor
 import cv2
+
 
 class Logger:
     def __init__(self, config, test_name):
@@ -66,7 +68,8 @@ class Logger:
             #         self.save_submission(out['final_prediction'],
             #                              batch['file_index'].cpu().item())
 
-            self.save_iwe(out['final_prediction'], batch['events_old'], batch['file_index'].cpu().item())
+            # self.save_iwe(out['final_prediction'], batch['events_old'], batch['file_index'].cpu().item())
+            self.save_gray(out['final_prediction'], batch['events_old'], batch['file_index'].cpu().item())
 
             if getattr(self.config, "saved_tensors", None) is None:
                 return
@@ -117,12 +120,35 @@ class Logger:
 
             # 直方图均衡化
             iwe = cv2.equalizeHist(iwe)
+            # 中值滤波
+            # iwe = cv2.medianBlur(iwe, 3)
 
             save_dir = os.path.join(self.path, "iwe")
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             imageio.imwrite(os.path.join(save_dir, f"{file_idx:06d}.jpg"),
                             iwe.astype(np.uint8))
+
+        def save_gray(self, flow, events, file_idx):
+            if not os.path.exists(os.path.join(self.path, "iwe")):
+                os.makedirs(os.path.join(self.path, "iwe"), exist_ok=True)
+                os.makedirs(os.path.join(self.path, "gray"), exist_ok=True)
+            image_reconstructor = ImageReconstructor(flow)
+            # [y,x,t,p]-->[t,y,x,p]
+            events = events[:, :, [2, 0, 1, 3]]
+            iwe, x_best = image_reconstructor.image_rec_from_events_l2(events, reg_weight=3e-1)
+            x_best = x_best * 255
+            x_best = x_best.astype(np.uint8)
+            iwe = iwe * 255
+            iwe = iwe.astype(np.uint8)
+            try:
+                imageio.imwrite(os.path.join(self.path, "iwe", f"{file_idx:06d}.jpg"), iwe)
+            except Exception as e:
+                print(e)
+            try:
+                imageio.imwrite(os.path.join(self.path, "gray", f"{file_idx:06d}.jpg"), x_best)
+            except Exception as e:
+                print(e)
 
         def log_metrics(self, results):
             self.results = results

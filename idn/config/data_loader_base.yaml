@@ -13,8 +13,8 @@ data_loader:
     mp: false
     batch_freq: 1500
     args:
-      batch_size: 1
+      batch_size: 2
       shuffle: false
-      num_workers: 1
+      num_workers: 2
       pin_memory: true
       prefetch_factor: 2

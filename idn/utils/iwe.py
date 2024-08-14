@@ -168,7 +168,7 @@ def compute_pol_iwe(flow, event_list, res, pos_mask, neg_mask, flow_scaling=128,
 def warp_events(flow, event_list, res, flow_scaling=128, round_idx=True) -> np.ndarray:
     """
     Args:
-        flow:
+        flow:[b,2,h,w]
         event_list: [y,x,t,p]
         res: [h,w]
         flow_scaling:
@@ -207,10 +207,14 @@ def warp_events(flow, event_list, res, flow_scaling=128, round_idx=True) -> np.n
     # iwe_p = (iwe_p - torch.min(iwe_p)) / (torch.max(iwe_p) - torch.min(iwe_p)) * 0.5
     # iwe_n = (iwe_n - torch.min(iwe_n)) / (torch.max(iwe_n) - torch.min(iwe_n)) * 0.5
 
+    flow_mag = torch.sqrt(flow[:, 0] ** 2 + flow[:, 1] ** 2)
+
     iwe = iwe_p + iwe_n
+
     # max_val = torch.max(iwe)
     # min_val = torch.min(iwe)
     if torch.is_tensor(iwe):
         iwe = iwe.cpu().squeeze().numpy()
-
+    flow_mag = np.where(flow_mag > 1e-1, flow_mag, 1)
+    iwe = iwe / flow_mag
     return iwe

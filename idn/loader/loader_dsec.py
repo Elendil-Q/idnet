@@ -189,7 +189,7 @@ class Sequence(Dataset):
                  delta_t_ms: int = 100,
                  num_bins: int = 15, transforms=[], name_idx=0, visualize=False, load_gt=False):
         assert num_bins >= 1
-        assert delta_t_ms == 100
+        # assert delta_t_ms == 100
         assert seq_path.is_dir()
         assert mode in {'train', 'test', 'infer'}
         '''
@@ -574,7 +574,7 @@ class SequenceRecurrent(Sequence):
         else:
             for i in range(len(self.timestamps_flow) - 1):
                 diff = self.timestamps_flow[i + 1] - self.timestamps_flow[i]
-                if diff < np.max([100000 * (self.sequence_length - 1) + 1000, 101000]):
+                if diff < np.max([self.delta_t_us * (self.sequence_length - 1) + 1000, self.delta_t_us + 1000]):
                     continuous_seq_idcs.append(i)
         return continuous_seq_idcs
 
